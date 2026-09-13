@@ -2,7 +2,7 @@ name: DRACO CI
 
 on:
   push:
-    branches: [main, feat/task-1-foundation]
+    branches: [main, feat/task-1-foundation, feat/task-2-schema]
   pull_request:
     branches: [main]
 
@@ -31,4 +31,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - run: python -m pytest tests/unit/test_health.py tests/integration/test_database.py -v
+      - run: alembic upgrade head
+      - run: python -m pytest tests/unit/test_health.py tests/integration/test_database.py tests/integration/test_schema.py -v
