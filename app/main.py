@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.operations import router as operations_router
 from app.database import database_ready, get_db
 from app.models import CollectionItem, Source, Watch
 from app.security.audit import append_audit_event
@@ -16,6 +17,7 @@ from app.services.fusion import build_assessment
 from app.services.tracking import upsert_track
 
 app = FastAPI(title="UNG-DRACO", version="1.0.0")
+app.include_router(operations_router)
 
 
 class ObservationCreate(BaseModel):
