@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +10,10 @@ from app.models import CollectionItem, Source, Watch
 from app.security.audit import append_audit_event
 from app.security.auth import get_current_principal
 from app.security.rbac import Principal, require_roles
+from app.services.alerts import evaluate_watches
+from app.services.correlation import correlate_observations
+from app.services.fusion import build_assessment
+from app.services.tracking import upsert_track
 
 app = FastAPI(title="UNG-DRACO", version="1.0.0")
 
@@ -94,6 +98,74 @@ def create_observation(
         "status": "accepted",
         "observation_id": str(observation.id),
         "event": "draco.observation.created",
+    }
+
+
+@app.post("/api/draco/v1/observations/{observation_id}/process")
+def process_observation(
+    observation_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_roles("draco_analyst", "draco_admin")),
+) -> dict:
+    observation = db.get(CollectionItem, observation_id)
+    if observation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="observation not found")
+
+    correlation_id = str(uuid4())
+    try:
+        related = correlate_observations(db, observation.id)
+        track = upsert_track(db, observation, related)
+        product = build_assessment(db, track)
+        alerts = evaluate_watches(db, track)
+
+        append_audit_event(
+            db,
+            actor_id=principal.subject,
+            action="track.processed",
+            resource_type="track",
+            resource_id=str(track.id),
+            correlation_id=correlation_id,
+            result="success",
+            request_metadata={
+                "observation_id": str(observation.id),
+                "related_observation_ids": [str(item.id) for item in related],
+            },
+        )
+        append_audit_event(
+            db,
+            actor_id=principal.subject,
+            action="intelligence_product.created",
+            resource_type="intelligence_product",
+            resource_id=str(product.id),
+            correlation_id=correlation_id,
+            result="success",
+            request_metadata={"track_id": str(track.id)},
+        )
+        for alert in alerts:
+            append_audit_event(
+                db,
+                actor_id=principal.subject,
+                action="alert.created",
+                resource_type="alert",
+                resource_id=str(alert.id),
+                correlation_id=correlation_id,
+                result="success",
+                request_metadata={"track_id": str(track.id), "watch_id": str(alert.watch_id)},
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "status": "processed",
+        "observation_id": str(observation.id),
+        "correlated_observation_ids": [str(item.id) for item in related],
+        "track_id": str(track.id),
+        "track_status": track.status,
+        "product_id": str(product.id),
+        "alert_ids": [str(alert.id) for alert in alerts],
+        "correlation_id": correlation_id,
     }
 
 
