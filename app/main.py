@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Response, status
@@ -7,7 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import database_ready, get_db
-from app.models import AuditEvent, CollectionItem, Source, Watch
+from app.models import CollectionItem, Source, Watch
+from app.security.audit import append_audit_event
+from app.security.auth import get_current_principal
+from app.security.rbac import Principal, require_roles
 
 app = FastAPI(title="UNG-DRACO", version="1.0.0")
 
@@ -32,21 +34,6 @@ class WatchCreate(BaseModel):
     target_type: str = Field(min_length=1, max_length=64)
 
 
-def _audit(db: Session, action: str, resource_type: str, resource_id: str, metadata: dict | None = None) -> None:
-    db.add(
-        AuditEvent(
-            actor_id="system:api",
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            correlation_id=str(uuid4()),
-            result="success",
-            request_metadata=metadata,
-            created_at=datetime.now(timezone.utc),
-        )
-    )
-
-
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"system": "UNG-DRACO", "status": "ok"}
@@ -61,8 +48,17 @@ def ready(response: Response) -> dict[str, str]:
     return {"system": "UNG-DRACO", "status": "not_ready"}
 
 
+@app.get("/v1/security/probe")
+def security_probe(principal: Principal = Depends(get_current_principal)) -> dict[str, str]:
+    return {"subject": principal.subject, "status": "authenticated"}
+
+
 @app.post("/api/draco/v1/observations", status_code=status.HTTP_201_CREATED)
-def create_observation(payload: ObservationCreate, db: Session = Depends(get_db)) -> dict[str, str]:
+def create_observation(
+    payload: ObservationCreate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_roles("draco_collector", "draco_admin")),
+) -> dict[str, str]:
     observation = CollectionItem(
         source_type=payload.source_type,
         domain=payload.domain,
@@ -75,12 +71,15 @@ def create_observation(payload: ObservationCreate, db: Session = Depends(get_db)
     try:
         db.add(observation)
         db.flush()
-        _audit(
+        append_audit_event(
             db,
+            actor_id=principal.subject,
             action="observation.created",
             resource_type="collection_item",
             resource_id=str(observation.id),
-            metadata={
+            correlation_id=str(uuid4()),
+            result="success",
+            request_metadata={
                 "source_type": payload.source_type,
                 "domain": payload.domain,
                 "event": "draco.observation.created",
@@ -99,12 +98,25 @@ def create_observation(payload: ObservationCreate, db: Session = Depends(get_db)
 
 
 @app.post("/api/draco/v1/sources", status_code=status.HTTP_201_CREATED)
-def create_source(payload: SourceCreate, db: Session = Depends(get_db)) -> dict[str, str]:
+def create_source(
+    payload: SourceCreate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_roles("draco_source_admin", "draco_admin")),
+) -> dict[str, str]:
     source = Source(real_name=payload.real_name, contact=payload.contact, notes=payload.notes)
     try:
         db.add(source)
         db.flush()
-        _audit(db, "source.registered", "source", str(source.id), {"real_name": payload.real_name})
+        append_audit_event(
+            db,
+            actor_id=principal.subject,
+            action="source.registered",
+            resource_type="source",
+            resource_id=str(source.id),
+            correlation_id=str(uuid4()),
+            result="success",
+            request_metadata={"real_name": payload.real_name},
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -113,7 +125,10 @@ def create_source(payload: SourceCreate, db: Session = Depends(get_db)) -> dict[
 
 
 @app.get("/api/draco/v1/sources")
-def list_sources(db: Session = Depends(get_db)) -> list[dict]:
+def list_sources(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_roles("draco_source_admin", "draco_admin")),
+) -> list[dict]:
     rows = db.scalars(select(Source).order_by(Source.created_at.asc())).all()
     return [
         {
@@ -127,17 +142,24 @@ def list_sources(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @app.post("/api/draco/v1/watches", status_code=status.HTTP_201_CREATED)
-def create_watch(payload: WatchCreate, db: Session = Depends(get_db)) -> dict:
+def create_watch(
+    payload: WatchCreate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_roles("draco_analyst", "draco_admin")),
+) -> dict:
     watch = Watch(target=payload.target, target_type=payload.target_type, active=True)
     try:
         db.add(watch)
         db.flush()
-        _audit(
+        append_audit_event(
             db,
-            "watch.created",
-            "watch",
-            str(watch.id),
-            {"target": payload.target, "target_type": payload.target_type},
+            actor_id=principal.subject,
+            action="watch.created",
+            resource_type="watch",
+            resource_id=str(watch.id),
+            correlation_id=str(uuid4()),
+            result="success",
+            request_metadata={"target": payload.target, "target_type": payload.target_type},
         )
         db.commit()
     except Exception:
@@ -147,7 +169,10 @@ def create_watch(payload: WatchCreate, db: Session = Depends(get_db)) -> dict:
 
 
 @app.get("/api/draco/v1/watches")
-def list_watches(db: Session = Depends(get_db)) -> list[dict]:
+def list_watches(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_roles("draco_analyst", "draco_admin")),
+) -> list[dict]:
     rows = db.scalars(select(Watch).order_by(Watch.created_at.asc())).all()
     return [
         {
