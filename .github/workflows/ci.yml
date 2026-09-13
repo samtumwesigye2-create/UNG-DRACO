@@ -31,4 +31,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
+      - run: alembic upgrade head
       - run: python -m pytest tests/unit/test_health.py tests/integration/test_database.py tests/integration/test_schema.py -v
