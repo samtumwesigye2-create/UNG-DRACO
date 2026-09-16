@@ -2,7 +2,7 @@ name: DRACO CI
 
 on:
   push:
-    branches: [main, feat/task-1-foundation, feat/task-2-schema]
+    branches: [main, feat/task-1-foundation, feat/task-2-schema, feature/live-operator-video]
   pull_request:
     branches: [main]
 
