@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.operations import router as operations_router
+from app.api.traffic import router as traffic_router
 from app.api.video import router as video_router
 from app.database import database_ready, get_db
 from app.models import CollectionItem, Source, Watch
@@ -21,9 +22,10 @@ from app.services.fusion import build_assessment
 from app.services.tracking import upsert_track
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-app = FastAPI(title="UNG-DRACO", version="1.0.0")
+app = FastAPI(title="UNG-DRACO", version="1.1.0")
 app.include_router(operations_router)
 app.include_router(video_router)
+app.include_router(traffic_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
