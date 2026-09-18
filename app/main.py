@@ -1,5 +1,7 @@
 from pathlib import Path
 import os
+import urllib.error
+import urllib.request
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
@@ -88,6 +90,19 @@ def health() -> dict[str,str]: return {"system":"UNG-DRACO","status":"ok"}
 def ready(response:Response)->dict[str,str]:
     if database_ready(): return {"system":"UNG-DRACO","status":"ready"}
     response.status_code=status.HTTP_503_SERVICE_UNAVAILABLE; return {"system":"UNG-DRACO","status":"not_ready"}
+@app.get("/v1/integration/health")
+def integration_health() -> dict:
+    nexus=os.getenv("NEXUS_BASE_URL","").rstrip("/")
+    if not nexus:
+        return {"nexus":"not_configured","live_link":False}
+    try:
+        req=urllib.request.Request(nexus+"/health",headers={"User-Agent":"UNG-DRACO/1.1.0"})
+        with urllib.request.urlopen(req,timeout=3) as response:
+            ok=200 <= int(response.status) < 300
+        return {"nexus":"online" if ok else "degraded","live_link":ok}
+    except Exception:
+        return {"nexus":"offline","live_link":False}
+
 @app.get("/v1/security/probe")
 def security_probe(principal:Principal=Depends(get_current_principal))->dict[str,str]: return {"subject":principal.subject,"status":"authenticated"}
 @app.post("/api/draco/v1/observations",status_code=status.HTTP_201_CREATED)
