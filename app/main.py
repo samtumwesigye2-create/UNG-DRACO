@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import urllib.error
 import urllib.request
+import shutil
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
@@ -102,6 +103,53 @@ def integration_health() -> dict:
         return {"nexus":"online" if ok else "degraded","live_link":ok}
     except Exception:
         return {"nexus":"offline","live_link":False}
+
+def _read_first(path: str) -> str | None:
+    try:
+        return Path(path).read_text().strip()
+    except Exception:
+        return None
+
+
+def _memory_metrics() -> dict:
+    values={}
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            key,val=line.split(":",1); values[key]=int(val.strip().split()[0])*1024
+    except Exception:
+        return {"total_bytes":None,"available_bytes":None,"used_percent":None}
+    total=values.get("MemTotal"); available=values.get("MemAvailable")
+    used_percent=round((1-(available/total))*100,1) if total and available is not None else None
+    return {"total_bytes":total,"available_bytes":available,"used_percent":used_percent}
+
+
+def _cpu_temp_c() -> float | None:
+    for path in ("/sys/class/thermal/thermal_zone0/temp","/sys/devices/virtual/thermal/thermal_zone0/temp"):
+        raw=_read_first(path)
+        if raw:
+            try:
+                value=float(raw); return round(value/1000 if value>1000 else value,1)
+            except ValueError:
+                pass
+    return None
+
+
+@app.get("/v1/device/health")
+def device_health() -> dict:
+    disk=shutil.disk_usage("/")
+    uptime_raw=_read_first("/proc/uptime")
+    uptime_seconds=int(float(uptime_raw.split()[0])) if uptime_raw else None
+    try: load1,load5,load15=os.getloadavg()
+    except Exception: load1=load5=load15=None
+    return {
+        "service":"UNG-DRACO",
+        "runtime":os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("ENVIRONMENT","unknown"),
+        "uptime_seconds":uptime_seconds,
+        "cpu":{"load_1m":round(load1,2) if load1 is not None else None,"load_5m":round(load5,2) if load5 is not None else None,"load_15m":round(load15,2) if load15 is not None else None,"temperature_c":_cpu_temp_c()},
+        "memory":_memory_metrics(),
+        "storage":{"total_bytes":disk.total,"free_bytes":disk.free,"used_percent":round((disk.used/disk.total)*100,1) if disk.total else None},
+        "hardware":{"rgb_noir":os.getenv("DRACO_RGB_STATUS","not_connected"),"thermal":os.getenv("DRACO_THERMAL_STATUS","not_connected"),"motion_controller":os.getenv("DRACO_MOTION_STATUS","not_connected")},
+    }
 
 @app.get("/v1/security/probe")
 def security_probe(principal:Principal=Depends(get_current_principal))->dict[str,str]: return {"subject":principal.subject,"status":"authenticated"}
