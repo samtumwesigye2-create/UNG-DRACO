@@ -29,6 +29,15 @@ def _required(service, name: str):
     if service is None: raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,f"{name} unavailable")
     return service
 
+@router.get("/status")
+def video_status():
+    return {
+        "signaling": signaling_service is not None,
+        "camera_control": control_service is not None,
+        "capture": capture_service is not None,
+        "operator_ready": signaling_service is not None,
+    }
+
 @router.post("/sessions",status_code=201)
 def create_session(payload: SessionCreate,principal: Principal=Depends(require_roles("draco_operator","draco_admin"))): return sessions.create(payload.unit_id,principal.subject)
 
