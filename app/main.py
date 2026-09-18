@@ -19,6 +19,7 @@ from app.security.rbac import Principal, require_roles
 from app.services.alerts import evaluate_watches
 from app.services.correlation import correlate_observations
 from app.services.fusion import build_assessment
+from app.services.nexus_transport import build_observation_event, relay_event
 from app.services.tracking import upsert_track
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -62,7 +63,9 @@ def create_observation(payload:ObservationCreate,db:Session=Depends(get_db),prin
     try:
         db.add(observation);db.flush();append_audit_event(db,actor_id=principal.subject,action="observation.created",resource_type="collection_item",resource_id=str(observation.id),correlation_id=str(uuid4()),result="success",request_metadata={"source_type":payload.source_type,"domain":payload.domain,"event":"draco.observation.created"});db.commit()
     except Exception: db.rollback();raise
-    return {"status":"accepted","observation_id":str(observation.id),"event":"draco.observation.created"}
+    envelope=build_observation_event(observation_id=str(observation.id),source_type=payload.source_type,domain=payload.domain,platform=payload.platform,location=payload.location,confidence=payload.confidence)
+    relay=relay_event(envelope)
+    return {"status":"accepted","observation_id":str(observation.id),"event":"draco.observation.created","event_id":envelope["message_id"],"nexus":relay}
 @app.post("/api/draco/v1/observations/{observation_id}/process")
 def process_observation(observation_id:str,db:Session=Depends(get_db),principal:Principal=Depends(require_roles("draco_analyst","draco_admin")))->dict:
     observation=db.get(CollectionItem,observation_id)
