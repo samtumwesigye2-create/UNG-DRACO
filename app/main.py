@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
@@ -28,6 +29,38 @@ app.include_router(operations_router)
 app.include_router(video_router)
 app.include_router(traffic_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.on_event("startup")
+def run_transport_acceptance_once() -> None:
+    if os.getenv("DRACO_ACCEPTANCE_ONCE","").lower() not in {"1","true","yes"}:
+        return
+    event_id=os.getenv("DRACO_ACCEPTANCE_EVENT_ID") or str(uuid4())
+    envelope={
+        "source_system":"UNG-DRACO",
+        "target_system":"UNG-PULSAR",
+        "message_type":"observation.created",
+        "message_id":event_id,
+        "correlation_id":event_id,
+        "trace_id":event_id,
+        "schema_version":"1.0",
+        "priority":10,
+        "classification":"internal",
+        "payload":{
+            "event_id":event_id,
+            "device_id":"DRACO-ACCEPTANCE",
+            "sensor_id":"synthetic",
+            "timestamp":"startup",
+            "sensor_type":"synthetic",
+            "domain":"acceptance-test",
+            "location":None,
+            "confidence":1.0,
+            "observation_id":event_id,
+            "synthetic":True,
+        },
+    }
+    result=relay_event(envelope)
+    print(f"DRACO_ACCEPTANCE event_id={event_id} result={result}",flush=True)
+
 
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse: return FileResponse(STATIC_DIR / "draco_dashboard.html")
