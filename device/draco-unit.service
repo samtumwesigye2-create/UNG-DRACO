@@ -1,0 +1,15 @@
+[Unit]
+Description=UNG-DRACO Gen-1 Unit Link
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/draco/unit.env
+ExecStart=/usr/bin/python3 /opt/draco/draco_unit_agent.py
+Restart=always
+RestartSec=5
+User=draco
+
+[Install]
+WantedBy=multi-user.target
