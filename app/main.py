@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.operations import router as operations_router
+from app.api.device import router as device_router, latest_unit
 from app.api.traffic import router as traffic_router
 from app.api.video import router as video_router
 from app.database import database_ready, get_db
@@ -29,6 +30,7 @@ from app.services.tracking import upsert_track
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="UNG-DRACO", version="1.1.0")
 app.include_router(operations_router)
+app.include_router(device_router)
 app.include_router(video_router)
 app.include_router(traffic_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -148,7 +150,7 @@ def device_health() -> dict:
         "cpu":{"load_1m":round(load1,2) if load1 is not None else None,"load_5m":round(load5,2) if load5 is not None else None,"load_15m":round(load15,2) if load15 is not None else None,"temperature_c":_cpu_temp_c()},
         "memory":_memory_metrics(),
         "storage":{"total_bytes":disk.total,"free_bytes":disk.free,"used_percent":round((disk.used/disk.total)*100,1) if disk.total else None},
-        "hardware":{"rgb_noir":os.getenv("DRACO_RGB_STATUS","not_connected"),"thermal":os.getenv("DRACO_THERMAL_STATUS","not_connected"),"motion_controller":os.getenv("DRACO_MOTION_STATUS","not_connected")},
+        "hardware":((lambda u: {"rgb_noir":u.get("rgb_noir"),"thermal":u.get("thermal"),"motion_controller":u.get("motion_controller"),"unit_id":u.get("unit_id"),"online":u.get("online"),"last_seen":u.get("last_seen")} if u else {"rgb_noir":"not_connected","thermal":"not_connected","motion_controller":"not_connected","unit_id":None,"online":False,"last_seen":None})(latest_unit())),
     }
 
 @app.get("/v1/security/probe")
