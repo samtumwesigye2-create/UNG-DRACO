@@ -1,4 +1,4 @@
-from ung_shared.system_adapter import register_frame, convert_position, link_timing
+from app.frame_propagation import register_frame, convert_position, link_timing
 from pathlib import Path
 import os
 import urllib.error
