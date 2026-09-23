@@ -1,3 +1,4 @@
+from ung_shared.system_adapter import register_frame, convert_position, link_timing
 from pathlib import Path
 import os
 import urllib.error
@@ -192,3 +193,13 @@ def create_watch(payload:WatchCreate,db:Session=Depends(get_db),principal:Princi
 @app.get("/api/draco/v1/watches")
 def list_watches(db:Session=Depends(get_db),principal:Principal=Depends(require_roles("draco_analyst","draco_admin")))->list[dict]:
     rows=db.scalars(select(Watch).order_by(Watch.created_at.asc())).all();return [{"id":str(i.id),"target":i.target,"target_type":i.target_type,"active":i.active,"start_date":i.start_date.isoformat() if i.start_date else None,"end_date":i.end_date.isoformat() if i.end_date else None} for i in rows]
+
+@app.post("/v1/frames/register")
+def ung_frame_register(body: dict):
+    return register_frame(body["source"],body["destination"],body["matrix"],body.get("timestamp"),body.get("version","ung-frame-v1"))
+@app.post("/v1/frames/convert")
+def ung_frame_convert(body: dict):
+    return convert_position(body["position"],body["source"],body["destination"])
+@app.post("/v1/propagation/link")
+def ung_propagation_link(body: dict):
+    return link_timing(body["origin_m"],body["destination_m"],float(body.get("speed_mps",299792458.0)))
