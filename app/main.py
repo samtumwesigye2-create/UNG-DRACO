@@ -159,7 +159,7 @@ def device_health() -> dict:
 @app.get("/v1/security/probe")
 def security_probe(principal:Principal=Depends(get_current_principal))->dict[str,str]: return {"subject":principal.subject,"status":"authenticated"}
 @app.post("/api/draco/v1/observations",status_code=status.HTTP_201_CREATED)
-def create_observation(payload:ObservationCreate,db:Session=Depends(get_db),principal:Principal=Depends(require_roles("draco_collector","draco_admin")))->dict[str,str]:
+def create_observation(payload:ObservationCreate,db:Session=Depends(get_db),principal:Principal=Depends(require_roles("draco_collector","draco_admin")))->dict:
     observation=CollectionItem(source_type=payload.source_type,domain=payload.domain,platform=payload.platform,location=payload.location,raw_content=payload.raw_content,confidence=payload.confidence)
     try:
         db.add(observation);db.flush();append_audit_event(db,actor_id=principal.subject,action="observation.created",resource_type="collection_item",resource_id=str(observation.id),correlation_id=str(uuid4()),result="success",request_metadata={"source_type":payload.source_type,"domain":payload.domain,"event":"draco.observation.created"});db.commit()
