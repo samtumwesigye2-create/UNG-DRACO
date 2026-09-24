@@ -1,6 +1,7 @@
 let pc=null,sessionId=null,reconnectAttempt=0,recording=false,statsTimer=null;
 const $=id=>document.getElementById(id);
 const movement=[...document.querySelectorAll('[data-command]')];
+const PAN_LEFT='PAN_LEFT',PAN_RIGHT='PAN_RIGHT',TILT_UP='TILT_UP',TILT_DOWN='TILT_DOWN';
 function setState(state){$('stream-state').textContent=state;$('connection-quality').textContent=state;const lost=state==='LINK LOST';$('link-lost').classList.toggle('show',lost);setControlsEnabled(state==='LIVE'||state==='DEGRADED');}
 function setControlsEnabled(enabled){movement.forEach(b=>b.disabled=!enabled);$('snapshot').disabled=!enabled;$('recording').disabled=!enabled;}
 async function api(path,options={}){const r=await fetch('/api/draco/v1/video'+path,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});if(!r.ok)throw new Error(`${r.status}`);if(r.status===204)return null;return r.json();}
