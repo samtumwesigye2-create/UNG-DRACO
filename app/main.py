@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.operations import router as operations_router
 from app.api.device import router as device_router, latest_unit
 from app.api.traffic import router as traffic_router
+from app.api.fusion_field import router as fusion_field_router
 from app.api.video import router as video_router
 from app.database import database_ready, get_db
 from app.models import CollectionItem, Source, Watch
@@ -34,6 +35,7 @@ app.include_router(operations_router)
 app.include_router(device_router)
 app.include_router(video_router)
 app.include_router(traffic_router)
+app.include_router(fusion_field_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.on_event("startup")
