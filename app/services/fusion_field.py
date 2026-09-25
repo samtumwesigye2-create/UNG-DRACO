@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from math import sqrt
 from threading import Lock
 from uuid import uuid4
+from app.services.math_analytics import vector_norm, sigma_residual
 
 @dataclass
 class FusionFieldEngine:
@@ -49,18 +50,22 @@ class FusionFieldEngine:
         weights=[max(.001,r["confidence"]*r["quality"]) for r in rows]
         total=sum(weights)
         focus=[sum(r["position"][i]*w for r,w in zip(rows,weights))/total for i in range(3)]
-        distances={r["sensor_id"]:sqrt(sum((r["position"][i]-focus[i])**2 for i in range(3))) for r in rows}
+        distances={r["sensor_id"]:vector_norm([r["position"][i]-focus[i] for i in range(3)]) for r in rows}
         radius=sqrt(sum(w*distances[r["sensor_id"]]**2 for r,w in zip(rows,weights))/total)
         # Robust cross-sensor disagreement: compare each residual with median residual, while preserving
         # a minimum physical scale so near-identical observations do not amplify floating-point noise.
         vals=sorted(distances.values()); median=vals[len(vals)//2]
         scale=max(1.0,median)
         normalized={k:v/scale for k,v in distances.items()}
+        residual_values=list(distances.values())
+        residual_mean=sum(residual_values)/len(residual_values)
+        residual_std=sqrt(sum((v-residual_mean)**2 for v in residual_values)/len(residual_values)) if len(residual_values)>1 else 0.0
+        sigma={k:sigma_residual(v,residual_mean,residual_std) for k,v in distances.items()}
         anomaly=any(v>2.5 for v in normalized.values()) if len(rows)>=2 else False
         return {"state_id":str(uuid4()),"timestamp":now.isoformat(),"status":"fused" if len(rows)>=2 else "partial",
                 "sensors":{r["sensor_id"]:{**r,"weight":w/total} for r,w in zip(rows,weights)},
                 "focus":focus,"confidence":round(sum(weights)/len(weights),4),"envelope_radius":round(radius,4),
-                "residuals":distances,"normalized_residuals":normalized,"anomaly":anomaly,
+                "residuals":distances,"normalized_residuals":normalized,"sigma_residuals":sigma,"anomaly":anomaly,
                 "stale_sensors":stale,"provenance":[r["observation_id"] for r in rows]}
 
     def state(self)->dict:
