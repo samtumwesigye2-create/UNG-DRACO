@@ -25,6 +25,18 @@ class Heartbeat(BaseModel):
     camera_control: bool = False
     cpu_temperature_c: float | None = None
     uptime_seconds: int | None = Field(default=None, ge=0)
+    # DRACO Power & Motion Layer telemetry. All fields are optional so existing units remain compatible.
+    input_voltage_v: float | None = Field(default=None, ge=0)
+    input_current_a: float | None = Field(default=None, ge=0)
+    input_power_w: float | None = Field(default=None, ge=0)
+    battery_percent: float | None = Field(default=None, ge=0, le=100)
+    power_source: str | None = Field(default=None, max_length=32)
+    undervoltage: bool = False
+    overcurrent: bool = False
+    s1_power_ok: bool | None = None
+    s2_power_ok: bool | None = None
+    s3_power_ok: bool | None = None
+    pan_tilt_power_ok: bool | None = None
 
 
 def _authorize(token: str | None) -> None:
