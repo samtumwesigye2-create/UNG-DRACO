@@ -153,7 +153,7 @@ def device_health() -> dict:
         "cpu":{"load_1m":round(load1,2) if load1 is not None else None,"load_5m":round(load5,2) if load5 is not None else None,"load_15m":round(load15,2) if load15 is not None else None,"temperature_c":_cpu_temp_c()},
         "memory":_memory_metrics(),
         "storage":{"total_bytes":disk.total,"free_bytes":disk.free,"used_percent":round((disk.used/disk.total)*100,1) if disk.total else None},
-        "hardware":((lambda u: {"rgb_noir":u.get("rgb_noir"),"thermal":u.get("thermal"),"motion_controller":u.get("motion_controller"),"unit_id":u.get("unit_id"),"online":u.get("online"),"last_seen":u.get("last_seen")} if u else {"rgb_noir":"not_connected","thermal":"not_connected","motion_controller":"not_connected","unit_id":None,"online":False,"last_seen":None})(latest_unit())),
+        "hardware":((lambda u: {**{k:u.get(k) for k in ("rgb_noir","thermal","motion_controller","unit_id","online","last_seen","input_voltage_v","input_current_a","input_power_w","battery_percent","power_source","undervoltage","overcurrent","s1_power_ok","s2_power_ok","s3_power_ok","pan_tilt_power_ok")}} if u else {"rgb_noir":"not_connected","thermal":"not_connected","motion_controller":"not_connected","unit_id":None,"online":False,"last_seen":None,"input_voltage_v":None,"input_current_a":None,"input_power_w":None,"battery_percent":None,"power_source":None,"undervoltage":False,"overcurrent":False,"s1_power_ok":None,"s2_power_ok":None,"s3_power_ok":None,"pan_tilt_power_ok":None})(latest_unit())),
     }
 
 @app.get("/v1/security/probe")
